@@ -1,17 +1,8 @@
 import itertools
 import time
-from threading import Thread, Event
+from multiprocessing import Process, Event
+from multiprocessing import synchronize
 from primes import is_prime
-
-"""
-spin和slow会并发地执行，主线程会启用一个新线程来执行spin，然后调用slow。
-
-python spinner_thread.py 
-spinner object: <Thread(Thread-1 (spin), initial)>
-| thinking!
-...
-Answer: 42  
-"""
 
 def spin(msg: str, done: Event) -> None: 
     """
@@ -25,21 +16,21 @@ def spin(msg: str, done: Event) -> None:
     blanks = " " * len(status)
     print(f"\r{blanks}\r", end="") # 通过空格重写清 空状态行，并将光标移回开始处
 
+def supervisor() -> int:
+    done = Event()
+
+    spinner = Process(target=spin, args=("thinking!", done)) # 用法类似Thread
+    print(f"spinner object: {spinner}") # 打印如  <Process name='Process-1' parent=14868 initial>，其中14868是运行本脚本的进程ID
+    spinner.start()
+    result = slow()
+    done.set()
+    spinner.join()
+    return result
+
 def slow() -> int:
     """该函数由主线程调用。调用sleep会阻塞主线程，但GIL被释放，因此spinner线程可以接着运行"""
     # time.sleep(3) # 
-    # print(is_prime(5_000_111_000_222_021))
     return is_prime(5_000_111_000_222_021)
-
-def supervisor() -> int: # 会返回slow()的结果
-    done = Event() # 协调主线程和spinner线程的关键
-    spinner = Thread(target=spin, args=("thinking!", done)) # 创建新线程
-    print(f"spinner object: {spinner}") # 展示spinner对象。输出 <Thread(Thread-1, initial)> ，initial是线程状态，表示还未启动
-    spinner.start() # 启动spinner线程
-    result = slow() # 调用slow()，会阻塞主线程，同时第二个线程会运行spinner动画
-    done.set() # 设置Event标签为True，这会终止spin函数中的循环
-    spinner.join() # 等待直到spinner线程终止
-    return result
 
 def main() -> None:
     result = supervisor()
